@@ -53,6 +53,7 @@ const Profile_model_1 = require("./models/Profile.model");
 const helpers_1 = require("./utils/helpers");
 const path_1 = __importDefault(require("path"));
 const Follow_Model_1 = require("./models/followers.model");
+const { authenticateToken } = require("./middleware/auth");
 dotenv_1.default.config();
 db_1.db.connect().then((db) => {
   if (db) {
@@ -403,7 +404,7 @@ app.delete("/profile/:handle", (req, res) =>
 );
 
 // Follow a user
-app.put("/follow", async (req, res) => {
+app.put("/follow",authenticateToken, async (req, res) => {
   const { followId, userId } = req.body;
 
   if (!followId || !userId) {
@@ -439,7 +440,7 @@ app.put("/follow", async (req, res) => {
     res.status(422).json({ error: err.message });
   }
 });
-app.put("/unFollow", async (req, res) => {
+app.put("/unFollow",authenticateToken, async (req, res) => {
   const { followId, userId } = req.body;
 
   if (!followId || !userId) {
