@@ -4,7 +4,7 @@ import cors from "cors";
 import compression from "compression";
 import fileUpload from "express-fileupload";
 import MailerLite from "@mailerlite/mailerlite-nodejs";
-
+import { authenticateToken } from "./middleware/auth";
 import fs from "fs";
 // import multer from "multer";
 
@@ -38,7 +38,7 @@ app.use(
     })
 );
 
-const port = process.env.PORT;
+const port = process.env.PORT || 4000;
 
 app.get("/", (req: Request, res: Response) => {
     res.send("meme maker running");
@@ -199,7 +199,30 @@ app.get("/profile/:handle", async (req: Request, res: Response) => {
 
         console.log("handle", handle);
 
-        const profile = await ProfileModel.findOne({ dyamicUserId: handle });
+        const profile = await ProfileModel.findOne({ handle: handle });
+        if (!profile) {
+            throw new Error("Profile not found");
+        }
+
+        res.json({
+            success: true,
+            data: profile,
+        });
+    } catch (e) {
+        res.status(404).json({
+            success: false,
+            message: (e as Error).message || "Something went wrong",
+            error: e,
+        });
+    }
+});
+
+app.get("/profileById/:id", async (req: Request, res: Response) => {
+    try {
+        let id = req.params.id;
+        console.log("id",id);
+        
+        const profile = await ProfileModel.findOne({ dyamicUserId: id });
         if (!profile) {
             throw new Error("Profile not found");
         }
@@ -530,9 +553,73 @@ app.post("/dynamic-webhook", async (req: Request, res: Response) => {
     }
 });
 
+app.put("/follow",authenticateToken, async (req:Request, res:Response) => {
+    const { followId, userId } = req.body;
+  
+    if (!followId || !userId) {
+      return res.status(422).json({ error: "Required parameters are missing" });
+    }
+  
+    try {
+      const userProfile = await ProfileModel.findById(userId);
+      const followProfile = await ProfileModel.findById(followId);
+  
+      if (!userProfile || !followProfile) {
+        return res.status(404).json({ error: "User or profile not found" });
+      }
+  
+      if (userProfile.following.includes(followId)) {
+        return res.status(400).json({ error: "Already following this profile" });
+      }
+  
+      await ProfileModel.findByIdAndUpdate(
+        followId,
+        { $push: { followers: userId } },
+        { new: true }
+      );
+  
+      const result = await ProfileModel.findByIdAndUpdate(
+        userId,
+        { $push: { following: followId } },
+        { new: true }
+      );
+  
+      res.json(result);
+    } catch (err) {
+      res.status(422).json({ error: (err as Error).message });
+    }
+  });
+
+  app.put("/unFollow",authenticateToken, async (req:Request, res:Response) => {
+    const { followId, userId } = req.body;
+  
+    if (!followId || !userId) {
+      return res.status(422).json({ error: "Required parameters are missing" });
+    }
+  
+    try {
+      await ProfileModel.findByIdAndUpdate(
+        followId,
+        { $pull: { followers: userId } },
+        { new: true }
+      );
+  
+      const result = await ProfileModel.findByIdAndUpdate(
+        userId,
+        { $pull: { following: followId } },
+        { new: true }
+      );
+  
+      res.json(result);
+    } catch (err) {
+      res.status(422).json({ error: (err as Error).message });
+    }
+  });
+
 // serve static files
 app.use(express.static("public"));
 
 app.listen(port, () => {
     console.log(`⚡️[server]: Server is running at http://localhost:${port}`);
 });
+
